@@ -3,8 +3,8 @@ use std::io::Write;
 
 use crossterm::cursor;
 use crossterm::execute;
-use crossterm::queue;
 use crossterm::terminal;
+use log::trace;
 
 pub struct Terminal {}
 
@@ -38,6 +38,8 @@ impl Terminal {
     }
 
     pub fn render(&self, frame: String) -> std::io::Result<()> {
+        trace!("Rendering");
+
         let (x, y) = crossterm::cursor::position()?;
 
         // Clear the terminal

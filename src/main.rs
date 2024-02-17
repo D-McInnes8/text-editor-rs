@@ -1,4 +1,7 @@
-use std::io;
+use std::fs::File;
+
+use structured_logger::json::new_writer;
+use structured_logger::Builder;
 
 use self::editor::Editor;
 
@@ -8,7 +11,18 @@ mod editor;
 mod terminal;
 
 fn main() {
-    let mut stdout = io::stdout();
+    // Initialize the logger.
+    let log_file = File::options()
+        .create(true)
+        .append(true)
+        .open("app.log")
+        .unwrap();
+
+    Builder::new()
+        .with_target_writer("*", new_writer(log_file))
+        .init();
+
+    //let mut stdout = io::stdout();
     //run(&mut stdout)
 
     let mut editor = Editor::new();
