@@ -10,9 +10,11 @@ use crossterm::terminal;
 use std::io;
 use std::io::stdout;
 
+use crate::document::Document;
 use crate::terminal::Terminal;
 
 pub struct Editor {
+    document: Option<Document>,
     exit: bool,
     status: String,
     terminal: Terminal,
@@ -21,6 +23,7 @@ pub struct Editor {
 impl Editor {
     pub fn new() -> Editor {
         Editor {
+            document: None,
             exit: false,
             status: String::from("Document"),
             terminal: Terminal::new(),
@@ -35,6 +38,7 @@ impl Editor {
             style::Print(format!("This is some text!"))
         )?;*/
 
+        self.document = Some(Document::new());
         self.terminal.startup()?;
 
         while !self.exit {
