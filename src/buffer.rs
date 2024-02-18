@@ -71,7 +71,6 @@ impl TextBuffer {
 
     pub fn prepend(&mut self, text: &str) {
         let pos = self.add_to_buffer(text);
-        //self.table.insert(0, Node::add(pos, text.len()));
         self.table
             .insert(0, Span::new(BufferType::Add, pos, text.len()));
     }
@@ -134,7 +133,7 @@ impl TextBuffer {
                 eprintln!("delete from single piece.");
                 let start_relative = start - p1.doc.start;
                 let end_relative = start + len;
-                self.split_piece(p1.index, start_relative, end_relative);
+                self.delete_split_piece(p1.index, start_relative, end_relative);
             }
             (Some(p1), Some(p2)) => {
                 eprintln!("delete from multiple pieces.");
@@ -147,7 +146,7 @@ impl TextBuffer {
         };
     }
 
-    fn split_piece(&mut self, index: usize, start: usize, end: usize) {
+    fn delete_split_piece(&mut self, index: usize, start: usize, end: usize) {
         // buffer   start length
         // original 0     22
         //
@@ -214,6 +213,112 @@ impl TextBuffer {
         text
     }
 
+    pub fn get_span_contents(&self, span: &Span) -> &str {
+        match span.buffer {
+            BufferType::Add => &self.add[span.start..span.end],
+            BufferType::Original => &self.original[span.start..span.end],
+        }
+    }
+
+    pub fn get_span_contents_with_offset(&self, span: &Span, offset: usize) -> &str {
+        let start_with_offset = span.start + offset;
+        match span.buffer {
+            BufferType::Add => &self.add[start_with_offset..span.end],
+            BufferType::Original => &self.original[start_with_offset..span.end],
+        }
+    }
+
+    pub fn get_line_content(&self, line: u32) -> Option<String> {
+        let mut result = String::new();
+
+        // special case if accessing the first line number
+        if line == 1 {
+            for span in &self.table {
+                let text = self.get_span_contents(&span);
+
+                // find the next new line character and return once it's found.
+                for (pos, c) in text.chars().enumerate() {
+                    if is_newline_char(c) {
+                        result += &text[..pos];
+                        return Some(result);
+                    }
+                }
+
+                // no new line characters in this piece, so add the entire piece to the result.
+                result += text;
+            }
+
+            // already on the last line, so just return the entire result.
+            return Some(result);
+        }
+
+        // main case where line number != 1
+        let mut current_line = 1;
+        let mut index = 0;
+
+        for piece in &self.table {
+            let contents = self.get_span_contents(&piece);
+            for (pos, c) in contents.chars().enumerate() {
+                if is_newline_char(c) {
+                    current_line += 1;
+                    if current_line == line {
+                        eprintln!("IS CURRENT LINE");
+                        return Some(self.get_line_content_until_next_linebreak(index, pos));
+                    }
+                }
+            }
+
+            index += 1;
+        }
+
+        None
+    }
+
+    fn get_line_content_until_next_linebreak(&self, index: usize, offset: usize) -> String {
+        let mut result = String::new();
+        let mut i = index;
+
+        while i < self.table.len() {
+            let span = &self.table[i];
+            let text = if i == index {
+                self.get_span_contents_with_offset(&span, offset + 1)
+            } else {
+                self.get_span_contents(&span)
+            };
+
+            // find the next new line character and return once it's found.
+            for (pos, c) in text.chars().enumerate() {
+                if is_newline_char(c) {
+                    result += &text[..pos];
+                    return result;
+                }
+            }
+
+            // no new line characters in this piece. If it's the origina span, calculate the
+            // offset, otherwise add the entire piece to the result and continue to the next piece.
+            result += text;
+            i += 1;
+        }
+
+        // already on the last line, so just return the entire result.
+        result
+    }
+
+    pub fn get_line_count(&self) -> u32 {
+        let mut count = 1;
+
+        for span in &self.table {
+            let text = self.get_span_contents(&span);
+            for c in text.chars() {
+                if is_newline_char(c) {
+                    count += 1;
+                }
+            }
+        }
+
+        count
+    }
+
     fn add_to_buffer(&mut self, text: &str) -> usize {
         let pos = self.add.len();
         self.add += text;
@@ -252,14 +357,11 @@ impl TextBuffer {
         }
         current_pos
     }
+}
 
-    fn get_text_for_piece(&self, pos: usize) -> &str {
-        let p = &self.table[pos];
-        match p.buffer {
-            BufferType::Add => &self.add[p.start..(p.start + p.len)],
-            BufferType::Original => &self.original[p.start..(p.start + p.len)],
-        }
-    }
+#[inline]
+fn is_newline_char(c: char) -> bool {
+    c == 0xA as char
 }
 
 #[cfg(test)]
@@ -338,5 +440,78 @@ mod tests {
         let actual = buffer.text();
 
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_single() {
+        let buffer = TextBuffer::new(Some(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        ));
+
+        let expected = Some(String::from(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        ));
+        let actual = buffer.get_line_content(1);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_multiple() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
+        buffer.append("\nSed varius magna quis maximus mattis.");
+
+        let expected = Some(String::from(
+            "Praesent ultricies lacus ut molestie dapibus.",
+        ));
+        let actual = buffer.get_line_content(2);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_multiple_spans() {
+        let mut buffer = TextBuffer::new(Some(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n",
+        ));
+        buffer.append("Praesent ultricies lacus ut molestie dapibus.\nNam diam lorem, e");
+        buffer.append("fficitur nec mauris eget, ultrices molestie mi.\nSed varius magna quis maximus mattis.");
+
+        let expected = Some(String::from(
+            "Nam diam lorem, efficitur nec mauris eget, ultrices molestie mi.",
+        ));
+        let actual = buffer.get_line_content(3);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_invalid() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
+        buffer.append("\nSed varius magna quis maximus mattis.");
+
+        let expected = None;
+        let actual = buffer.get_line_content(5);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_count_empty() {
+        let buffer = TextBuffer::new(None);
+        assert_eq!(1, buffer.get_line_count());
+    }
+
+    #[test]
+    fn get_line_count_single() {
+        let buffer = TextBuffer::new(Some(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        ));
+        assert_eq!(1, buffer.get_line_count());
+    }
+
+    #[test]
+    fn get_line_count_multiple() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.\nSed varius magna quis maximus mattis.");
+        assert_eq!(4, buffer.get_line_count());
     }
 }
