@@ -26,13 +26,13 @@ pub struct Span {
 pub struct DocumentPiece {
     index: usize,
     span: Span,
-    pos: DocumentPosition,
+    doc: DocumentSpan,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct DocumentPosition {
-    start: u32,
-    end: u32,
+pub struct DocumentSpan {
+    start: usize,
+    end: usize,
 }
 
 impl Span {
@@ -84,8 +84,6 @@ impl TextBuffer {
 
     pub fn insert(&mut self, pos: usize, text: &str) {
         info!("Inserting {} at position {}", text, pos);
-        //eprintln!();
-        //eprintln!("Inserting {} at position {}", text, pos);
 
         // position is at the start
         if pos == 0 {
@@ -100,37 +98,20 @@ impl TextBuffer {
         }
 
         // position is in the middle
-        if let Some((piece, piece_index, pos_in_document)) = &self.get_piece_at_position(pos) {
+        if let Some(piece) = &self.get_piece_at_position(pos) {
             let pos_in_add_buffer = self.add_to_buffer(text);
 
-            /*eprintln!("{:?}", self);
-            eprintln!(
-                "piece: {:?}, piece index: {}, doc position: {}",
-                piece, piece_index, pos_in_document
-            );
-            eprintln!(
-                "p3 length: {} - {} - {}",
-                piece.length, pos, pos_in_document
-            );*/
-
-            let piece1 = Span::new(piece.buffer, piece.start, pos - pos_in_document); //pos_in_document + pos);
+            let piece1 = Span::new(piece.span.buffer, piece.span.start, pos - piece.doc.start); //pos_in_document + pos);
             let piece2 = Span::new(BufferType::Add, pos_in_add_buffer, text.len());
-
-            /*eprintln!();
-            eprintln!("piece1: {:?}", piece1);
-            eprintln!("piece2: {:?}", piece2);
-            eprintln!("{} - ({} + {})", piece.length, piece1.start, piece1.length);
-            eprintln!();*/
             let piece3 = Span::new(
-                piece.buffer,
+                piece.span.buffer,
                 piece1.start + piece1.len,
-                piece.len - (piece1.start + piece1.len),
-                //piece.length - pos - pos_in_document,
+                piece.span.len - (piece1.start + piece1.len),
             );
 
-            self.table[*piece_index] = piece1;
-            self.table.insert(piece_index + 1, piece3);
-            self.table.insert(piece_index + 1, piece2);
+            self.table[piece.index] = piece1;
+            self.table.insert(piece.index + 1, piece3);
+            self.table.insert(piece.index + 1, piece2);
         } else {
             warn!("Position {} is too large", pos);
         }
@@ -151,29 +132,18 @@ impl TextBuffer {
         let p1 = self.get_piece_at_position(start);
         let p2 = self.get_piece_at_position(end);
 
-        eprintln!(
-            "p1: {:?}. text: {}",
-            p1,
-            self.get_text_for_piece(p1.unwrap().1)
-        );
-        eprintln!(
-            "p2: {:?}. text: {}",
-            p2,
-            self.get_text_for_piece(p2.unwrap().1)
-        );
-
         match (p1, p2) {
-            (Some((p1, i1, d1)), Some((p2, i2, d2))) if i1 == i2 => {
+            (Some(p1), Some(p2)) if p1.index == p2.index => {
                 eprintln!("delete from single piece.");
-                let start_relative = start - d1;
+                let start_relative = start - p1.doc.start;
                 let end_relative = start + len;
-                self.split_piece(i1, start_relative, end_relative);
+                self.split_piece(p1.index, start_relative, end_relative);
             }
-            (Some((p1, i1, d1)), Some((p2, i2, d2))) => {
+            (Some(p1), Some(p2)) => {
                 eprintln!("delete from multiple pieces.");
-                self.delete_multiple(i1, i2);
+                self.delete_multiple(p1.index, p2.index);
             }
-            (Some((a, b, c)), None) => {}
+            (Some(p), None) => {}
             _ => {
                 eprintln!("none");
             }
@@ -229,7 +199,7 @@ impl TextBuffer {
         text
     }
 
-    fn get_piece_at_position(&self, pos: usize) -> Option<(Span, usize, usize)> {
+    fn get_piece_at_position(&self, pos: usize) -> Option<DocumentPiece> {
         let mut current_pos = 0;
 
         for (i, piece) in self.table.iter().enumerate() {
@@ -245,7 +215,15 @@ impl TextBuffer {
                 //eprintln!("Returning piece");
                 eprintln!("piece: {:?}. text: {}", piece, self.get_text_for_piece(i));
                 eprintln!("{} >= {}", current_pos, pos);
-                return Some((piece.clone(), i, current_pos));
+                //return Some((piece.clone(), i, current_pos));
+                return Some(DocumentPiece {
+                    index: i,
+                    span: piece.clone(),
+                    doc: DocumentSpan {
+                        start: current_pos,
+                        end: current_pos + piece.len,
+                    },
+                });
             }
 
             current_pos += piece.len;
