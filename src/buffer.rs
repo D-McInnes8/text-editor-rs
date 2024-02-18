@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::{debug, error, info, warn};
 
 #[derive(Debug)]
 pub struct TextBuffer {
@@ -76,29 +76,29 @@ impl TextBuffer {
             .insert(0, Span::new(BufferType::Add, pos, text.len()));
     }
 
-    fn add_to_buffer(&mut self, text: &str) -> usize {
-        let pos = self.add.len();
-        self.add += text;
-        pos
-    }
-
     pub fn insert(&mut self, pos: usize, text: &str) {
         info!("Inserting {} at position {}", text, pos);
 
         // position is at the start
         if pos == 0 {
+            debug!("Prepending text to the start of the piece table");
             self.prepend(text);
             return;
         }
 
         // position is at the end
         if pos == self.doc_len() {
+            debug!("Appending text to the end of the piece table");
             self.append(text);
             return;
         }
 
         // position is in the middle
         if let Some(piece) = &self.get_piece_at_position(pos) {
+            debug!(
+                "Splitting row {} of the piece table into multiple pieces",
+                piece.index
+            );
             let pos_in_add_buffer = self.add_to_buffer(text);
 
             let piece1 = Span::new(piece.span.buffer, piece.span.start, pos - piece.doc.start); //pos_in_document + pos);
@@ -119,9 +119,6 @@ impl TextBuffer {
 
     pub fn delete(&mut self, start: usize, end: usize) {
         let len = end - start;
-        eprintln!("start: {}, end: {}", start, end);
-        eprintln!("len: {}", len);
-        eprintln!("buffer: {:?}", self);
 
         // start and end are in the same piece:
         //     1. split the piece into two new pieces.
@@ -141,7 +138,7 @@ impl TextBuffer {
             }
             (Some(p1), Some(p2)) => {
                 eprintln!("delete from multiple pieces.");
-                self.delete_multiple(p1.index, p2.index);
+                self.delete_multiple(&p1, &p2, start, end);
             }
             (Some(p), None) => {}
             _ => {
@@ -167,15 +164,33 @@ impl TextBuffer {
         self.table.insert(index + 1, p2);
     }
 
-    fn delete_multiple(&mut self, i1: usize, i2: usize) {
-        let p1 = &self.table[i1];
-        let p2 = &self.table[i2];
+    fn delete_multiple(
+        &mut self,
+        p1: &DocumentPiece,
+        p2: &DocumentPiece,
+        start: usize,
+        end: usize,
+    ) {
+        // update the first piece.
+        let p1_len_to_delete = p1.doc.end - start;
+        let p1_new_end = p1.span.end - p1_len_to_delete;
+        let p1_new_len = p1.span.len - p1_len_to_delete;
 
-        // Remove and pieces between the two pieces.
-        if i2 - i1 > 1 {
-            for i in i1 + 1..i2 - 1 {
-                eprintln!("index: {}", i);
-                //self.table.remove(i);
+        self.table[p1.index].end = p1_new_end;
+        self.table[p1.index].len = p1_new_len;
+
+        // update the final piece.
+        let p2_new_len = p2.doc.end - end;
+        let p2_new_start = p2.span.end - p2_new_len;
+
+        self.table[p2.index].len = p2_new_len;
+        self.table[p2.index].start = p2_new_start;
+
+        // remove and pieces between the two pieces.
+        if p2.index - p1.index > 1 {
+            for i in p1.index + 1..p2.index {
+                debug!("Removing index {} from piece table", i);
+                self.table.remove(i);
             }
         }
     }
@@ -199,23 +214,17 @@ impl TextBuffer {
         text
     }
 
+    fn add_to_buffer(&mut self, text: &str) -> usize {
+        let pos = self.add.len();
+        self.add += text;
+        pos
+    }
+
     fn get_piece_at_position(&self, pos: usize) -> Option<DocumentPiece> {
         let mut current_pos = 0;
 
         for (i, piece) in self.table.iter().enumerate() {
-            /*eprintln!(
-                "index: {}, piece: {:?}. text: '{}'",
-                i,
-                piece,
-                self.get_text_for_piece(i)
-            );*/
-            //current_pos += piece.length;
-            eprintln!("current pos: {}", current_pos);
             if current_pos + piece.len >= pos {
-                //eprintln!("Returning piece");
-                eprintln!("piece: {:?}. text: {}", piece, self.get_text_for_piece(i));
-                eprintln!("{} >= {}", current_pos, pos);
-                //return Some((piece.clone(), i, current_pos));
                 return Some(DocumentPiece {
                     index: i,
                     span: piece.clone(),
@@ -229,7 +238,7 @@ impl TextBuffer {
             current_pos += piece.len;
         }
 
-        eprintln!(
+        error!(
             "Invalid position. Pos: {}, Current pos: {}",
             pos, current_pos
         );
@@ -327,6 +336,7 @@ mod tests {
 
         let expected = "Lorem ipsum dolor sit amet";
         let actual = buffer.text();
+
         assert_eq!(expected, actual);
     }
 }
