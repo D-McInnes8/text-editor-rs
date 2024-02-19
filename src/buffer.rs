@@ -408,9 +408,20 @@ mod tests {
     }
 
     #[test]
-    fn append() {
+    fn insert_start_of_line() {
+        let mut buffer = TextBuffer::new(Some("dolor sit amet"));
+        buffer.insert(0, "ipsum ");
+        buffer.prepend("Lorem ");
+
+        let expected = "Lorem ipsum dolor sit amet";
+        let actual = buffer.text();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn insert_end_of_line() {
         let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor"));
-        buffer.append(" sit");
+        buffer.insert(17, " sit");
         buffer.append(" amet");
 
         let expected = "Lorem ipsum dolor sit amet";
@@ -419,17 +430,67 @@ mod tests {
     }
 
     #[test]
-    fn insert() {
-        let mut buffer = TextBuffer::new(Some("This is  text"));
-        buffer.insert(8, "some");
+    fn insert_middle_of_line() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum  sit amet"));
+        buffer.insert(12, "dolor");
 
-        let expected = "This is some text";
+        let expected = "Lorem ipsum dolor sit amet";
         let actual = buffer.text();
         assert_eq!(expected, actual);
     }
 
     #[test]
-    fn delete() {
+    fn delete_start_of_line() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        buffer.delete(0, 6);
+
+        let expected = "ipsum dolor sit amet";
+        let actual = buffer.text();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn delete_end_of_line() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        buffer.delete(21, 26);
+
+        let expected = "Lorem ipsum dolor sit";
+        let actual = buffer.text();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn delete_middle_of_line() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        buffer.delete(9, 19);
+
+        let expected = "Lorem ipsit amet";
+        let actual = buffer.text();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn delete_end_out_of_bounds() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        buffer.delete(21, 29);
+
+        let expected = "Lorem ipsum dolor sit";
+        let actual = buffer.text();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn delete_start_and_end_out_of_bounds() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        buffer.delete(28, 31);
+
+        let expected = "Lorem ipsum dolor sit amet";
+        let actual = buffer.text();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn insert_and_delete() {
         let mut buffer = TextBuffer::new(Some("ipsum sit amet"));
         buffer.insert(0, "Lorem ");
         buffer.insert(11, "deletedtext");
@@ -440,6 +501,13 @@ mod tests {
         let actual = buffer.text();
 
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_empty() {
+        let buffer = TextBuffer::new(None);
+        let actual = buffer.get_line_content(1);
+        assert_eq!(None, actual);
     }
 
     #[test]
@@ -456,7 +524,31 @@ mod tests {
     }
 
     #[test]
-    fn get_line_contents_multiple() {
+    fn get_line_contents_first_line() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
+        buffer.append("\nSed varius magna quis maximus mattis.");
+
+        let expected = Some(String::from(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        ));
+        let actual = buffer.get_line_content(1);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_last_line() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
+        buffer.append("\nSed varius magna quis maximus mattis.");
+
+        let expected = Some(String::from("Sed varius magna quis maximus mattis."));
+        let actual = buffer.get_line_content(4);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_newline_at_start_of_line() {
         let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
         buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
         buffer.append("\nSed varius magna quis maximus mattis.");
@@ -469,7 +561,20 @@ mod tests {
     }
 
     #[test]
-    fn get_line_contents_multiple_spans() {
+    fn get_line_contents_newline_at_end_of_line() {
+        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.\n"));
+        buffer.append("Nam diam lorem, efficitur nec mauris eget, ultrices molestie mi.\n");
+        buffer.append("Sed varius magna quis maximus mattis.");
+
+        let expected = Some(String::from(
+            "Nam diam lorem, efficitur nec mauris eget, ultrices molestie mi.",
+        ));
+        let actual = buffer.get_line_content(3);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_contents_newline_in_middle_of_line() {
         let mut buffer = TextBuffer::new(Some(
             "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n",
         ));
