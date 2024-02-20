@@ -1,5 +1,8 @@
+use std::ffi::OsString;
 use std::fs::File;
+use std::path::Path;
 
+use clap::Parser;
 use structured_logger::json::new_writer;
 use structured_logger::Builder;
 
@@ -10,7 +13,19 @@ mod document;
 mod editor;
 mod terminal;
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(name = "Document")]
+    doc: Option<OsString>,
+}
+
 fn main() {
+    let args = Args::parse();
+    let file = args.doc.and_then(|file| {
+        std::env::current_dir().map_or(None, |dir| Some(Path::new(&dir).join(file)))
+    });
+
     // Initialize the logger.
     let log_file = File::options()
         .create(true)
@@ -26,5 +41,6 @@ fn main() {
     //run(&mut stdout)
 
     let mut editor = Editor::new();
+    editor.load(file);
     editor.run();
 }

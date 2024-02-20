@@ -9,6 +9,7 @@ use crossterm::execute;
 use crossterm::terminal;
 use std::io;
 use std::io::stdout;
+use std::path::PathBuf;
 
 use crate::document::Document;
 use crate::terminal::Terminal;
@@ -52,6 +53,12 @@ impl Editor {
 
     pub fn exit(&mut self) {
         self.exit = true;
+    }
+
+    pub fn load(&mut self, file: Option<PathBuf>) {
+        if let Some(path) = file {
+            self.document = Some(Document::load(Some(path)));
+        }
     }
 
     fn read_key_press(&mut self) -> std::io::Result<()> {
