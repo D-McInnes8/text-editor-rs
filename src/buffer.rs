@@ -47,19 +47,17 @@ impl Span {
 }
 
 impl TextBuffer {
-    pub fn new(text: Option<&str>) -> TextBuffer {
+    pub fn new(text: Option<String>) -> TextBuffer {
         let mut buffer = TextBuffer {
-            original: text.unwrap_or("").to_owned(),
+            original: text.unwrap_or(String::new()),
             add: String::new(),
             table: Vec::with_capacity(500),
             lines: Vec::with_capacity(10),
         };
 
-        buffer.table.push(Span::new(
-            BufferType::Original,
-            0,
-            text.map_or(0, |x| x.len()),
-        ));
+        buffer
+            .table
+            .push(Span::new(BufferType::Original, 0, buffer.original.len()));
 
         buffer
     }
@@ -130,13 +128,11 @@ impl TextBuffer {
 
         match (p1, p2) {
             (Some(p1), Some(p2)) if p1.index == p2.index => {
-                eprintln!("delete from single piece.");
                 let start_relative = start - p1.doc.start;
                 let end_relative = start + len;
                 self.delete_split_piece(p1.index, start_relative, end_relative);
             }
             (Some(p1), Some(p2)) => {
-                eprintln!("delete from multiple pieces.");
                 self.delete_multiple(&p1, &p2, start, end);
             }
             (Some(p), None) => {}
@@ -262,7 +258,6 @@ impl TextBuffer {
                 if is_newline_char(c) {
                     current_line += 1;
                     if current_line == line {
-                        eprintln!("IS CURRENT LINE");
                         return Some(self.get_line_content_until_next_linebreak(index, pos));
                     }
                 }
@@ -409,7 +404,7 @@ mod tests {
 
     #[test]
     fn insert_start_of_line() {
-        let mut buffer = TextBuffer::new(Some("dolor sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("dolor sit amet")));
         buffer.insert(0, "ipsum ");
         buffer.prepend("Lorem ");
 
@@ -420,7 +415,7 @@ mod tests {
 
     #[test]
     fn insert_end_of_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor")));
         buffer.insert(17, " sit");
         buffer.append(" amet");
 
@@ -431,7 +426,7 @@ mod tests {
 
     #[test]
     fn insert_middle_of_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum  sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum  sit amet")));
         buffer.insert(12, "dolor");
 
         let expected = "Lorem ipsum dolor sit amet";
@@ -441,7 +436,7 @@ mod tests {
 
     #[test]
     fn delete_start_of_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet")));
         buffer.delete(0, 6);
 
         let expected = "ipsum dolor sit amet";
@@ -451,7 +446,7 @@ mod tests {
 
     #[test]
     fn delete_end_of_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet")));
         buffer.delete(21, 26);
 
         let expected = "Lorem ipsum dolor sit";
@@ -461,7 +456,7 @@ mod tests {
 
     #[test]
     fn delete_middle_of_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet")));
         buffer.delete(9, 19);
 
         let expected = "Lorem ipsit amet";
@@ -471,7 +466,7 @@ mod tests {
 
     #[test]
     fn delete_end_out_of_bounds() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet")));
         buffer.delete(21, 29);
 
         let expected = "Lorem ipsum dolor sit";
@@ -481,7 +476,7 @@ mod tests {
 
     #[test]
     fn delete_start_and_end_out_of_bounds() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet")));
         buffer.delete(28, 31);
 
         let expected = "Lorem ipsum dolor sit amet";
@@ -491,7 +486,7 @@ mod tests {
 
     #[test]
     fn insert_and_delete() {
-        let mut buffer = TextBuffer::new(Some("ipsum sit amet"));
+        let mut buffer = TextBuffer::new(Some(String::from("ipsum sit amet")));
         buffer.insert(0, "Lorem ");
         buffer.insert(11, "deletedtext");
         buffer.insert(11, " dolor");
@@ -512,9 +507,9 @@ mod tests {
 
     #[test]
     fn get_line_contents_single() {
-        let buffer = TextBuffer::new(Some(
+        let buffer = TextBuffer::new(Some(String::from(
             "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-        ));
+        )));
 
         let expected = Some(String::from(
             "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
@@ -525,7 +520,7 @@ mod tests {
 
     #[test]
     fn get_line_contents_first_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.")));
         buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
         buffer.append("\nSed varius magna quis maximus mattis.");
 
@@ -538,7 +533,7 @@ mod tests {
 
     #[test]
     fn get_line_contents_last_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.")));
         buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
         buffer.append("\nSed varius magna quis maximus mattis.");
 
@@ -549,7 +544,7 @@ mod tests {
 
     #[test]
     fn get_line_contents_newline_at_start_of_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.")));
         buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
         buffer.append("\nSed varius magna quis maximus mattis.");
 
@@ -562,7 +557,7 @@ mod tests {
 
     #[test]
     fn get_line_contents_newline_at_end_of_line() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.\n"));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.\n")));
         buffer.append("Nam diam lorem, efficitur nec mauris eget, ultrices molestie mi.\n");
         buffer.append("Sed varius magna quis maximus mattis.");
 
@@ -575,9 +570,9 @@ mod tests {
 
     #[test]
     fn get_line_contents_newline_in_middle_of_line() {
-        let mut buffer = TextBuffer::new(Some(
+        let mut buffer = TextBuffer::new(Some(String::from(
             "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n",
-        ));
+        )));
         buffer.append("Praesent ultricies lacus ut molestie dapibus.\nNam diam lorem, e");
         buffer.append("fficitur nec mauris eget, ultrices molestie mi.\nSed varius magna quis maximus mattis.");
 
@@ -590,7 +585,7 @@ mod tests {
 
     #[test]
     fn get_line_contents_invalid() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.")));
         buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.");
         buffer.append("\nSed varius magna quis maximus mattis.");
 
@@ -607,15 +602,15 @@ mod tests {
 
     #[test]
     fn get_line_count_single() {
-        let buffer = TextBuffer::new(Some(
+        let buffer = TextBuffer::new(Some(String::from(
             "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-        ));
+        )));
         assert_eq!(1, buffer.get_line_count());
     }
 
     #[test]
     fn get_line_count_multiple() {
-        let mut buffer = TextBuffer::new(Some("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus."));
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.")));
         buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.\nSed varius magna quis maximus mattis.");
         assert_eq!(4, buffer.get_line_count());
     }

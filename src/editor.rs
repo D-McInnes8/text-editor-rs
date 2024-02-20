@@ -7,6 +7,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::execute;
 use crossterm::terminal;
+use std::error::Error;
 use std::io;
 use std::io::stdout;
 use std::path::PathBuf;
@@ -55,10 +56,12 @@ impl Editor {
         self.exit = true;
     }
 
-    pub fn load(&mut self, file: Option<PathBuf>) {
+    pub fn load(&mut self, file: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         if let Some(path) = file {
-            self.document = Some(Document::load(Some(path)));
+            let document = Document::load(path)?;
+            self.document = Some(document);
         }
+        Ok(())
     }
 
     fn read_key_press(&mut self) -> std::io::Result<()> {
