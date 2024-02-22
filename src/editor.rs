@@ -7,10 +7,14 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::execute;
 use crossterm::terminal;
+use log::debug;
+use log::info;
 use std::error::Error;
+use std::ffi::OsStr;
 use std::io;
 use std::io::stdout;
 use std::path::PathBuf;
+use unicode_width::UnicodeWidthStr;
 
 use crate::document::Document;
 use crate::terminal::Terminal;
@@ -40,7 +44,9 @@ impl Editor {
             style::Print(format!("This is some text!"))
         )?;*/
 
-        self.document = Some(Document::new());
+        if self.document.is_none() {
+            self.document = Some(Document::new());
+        }
         self.terminal.startup()?;
 
         while !self.exit {
@@ -149,11 +155,32 @@ impl Editor {
         let size = self.terminal.size();
 
         let mut buffer = String::new();
-        for row in 0..size.height {
-            if row == size.height - 1 {
-                buffer += self.render_status_line().as_str();
-            } else {
-                buffer += "\n";
+        if let Some(document) = &self.document {
+            let lines = document.get_lines(std::ops::Range {
+                start: 1,
+                end: (size.height - 1) as u32,
+            });
+
+            for row in 0..size.height {
+                if row == size.height - 1 {
+                    buffer += self.render_status_line().as_str();
+                } else {
+                    /*let line = lines[row as usize].as_str();
+                    info!(
+                        "Unicode Width: {}, Normal Width: {}",
+                        UnicodeWidthStr::width_cjk(line),
+                        line.len()
+                    );*/
+                    if (row as usize) < lines.len() {
+                        if lines[row as usize].len() > size.width as usize {
+                            buffer += &lines[row as usize][0..size.width as usize];
+                        } else {
+                            buffer += &lines[row as usize];
+                        }
+                    }
+                    buffer += "\r\n";
+                    //buffer += "\n";
+                }
             }
         }
 

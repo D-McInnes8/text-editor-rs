@@ -62,6 +62,7 @@ pub struct CursorPosition {
     pub y: u16,
 }
 
+#[derive(Debug)]
 pub struct TerminalSize {
     pub width: u16,
     pub height: u16,

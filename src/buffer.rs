@@ -59,6 +59,7 @@ impl TextBuffer {
             .table
             .push(Span::new(BufferType::Original, 0, buffer.original.len()));
 
+        info!("{:?}", &buffer);
         buffer
     }
 
