@@ -11,6 +11,7 @@ use self::editor::Editor;
 mod buffer;
 mod document;
 mod editor;
+mod keymaps;
 mod terminal;
 
 #[derive(Parser, Debug)]

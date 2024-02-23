@@ -37,6 +37,22 @@ impl Terminal {
         execute!(stdout(), cursor::MoveTo(pos.x, pos.y)).expect("");
     }
 
+    pub fn move_cursor_left(&self, u: u16) -> std::io::Result<()> {
+        execute!(stdout(), cursor::MoveLeft(u))
+    }
+
+    pub fn move_cursor_right(&self, u: u16) -> std::io::Result<()> {
+        execute!(stdout(), cursor::MoveRight(u))
+    }
+
+    pub fn move_cursor_up(&self, u: u16) -> std::io::Result<()> {
+        execute!(stdout(), cursor::MoveUp(u))
+    }
+
+    pub fn move_cursor_down(&self, u: u16) -> std::io::Result<()> {
+        execute!(stdout(), cursor::MoveDown(u))
+    }
+
     pub fn render(&self, frame: String) -> std::io::Result<()> {
         trace!("Rendering");
 

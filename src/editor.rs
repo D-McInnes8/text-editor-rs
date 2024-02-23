@@ -1,29 +1,34 @@
 use console::style;
 use crossterm::cursor;
 use crossterm::event;
-use crossterm::event::Event;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::execute;
+use crossterm::event::Event as TerminalEvent;
 use crossterm::terminal;
-use log::debug;
-use log::info;
 use std::error::Error;
-use std::ffi::OsStr;
 use std::io;
-use std::io::stdout;
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
 
 use crate::document::Document;
+use crate::keymaps::KeyMaps;
+use crate::terminal::CursorPosition;
 use crate::terminal::Terminal;
 
 pub struct Editor {
     document: Option<Document>,
     exit: bool,
+    keymaps: KeyMaps,
     status: String,
     terminal: Terminal,
+}
+
+pub enum Event {
+    KeyPress(char),
+    Exit,
+    MoveCursor(CursorPosition),
+    MoveCursorUp(u16),
+    MoveCursorDown(u16),
+    MoveCursorLeft(u16),
+    MoveCursorRight(u16),
 }
 
 impl Editor {
@@ -31,6 +36,7 @@ impl Editor {
         Editor {
             document: None,
             exit: false,
+            keymaps: KeyMaps {},
             status: String::from("Document"),
             terminal: Terminal::new(),
         }
@@ -50,7 +56,8 @@ impl Editor {
         self.terminal.startup()?;
 
         while !self.exit {
-            self.read_key_press()?;
+            //self.read_key_press()?;
+            self.handle_event()?;
         }
 
         self.terminal.shutdown()?;
@@ -70,69 +77,42 @@ impl Editor {
         Ok(())
     }
 
-    fn read_key_press(&mut self) -> std::io::Result<()> {
-        match event::read()? {
-            Event::FocusGained => {}
-            Event::FocusLost => {}
-            Event::Key(KeyEvent {
-                code: KeyCode::Left,
-                modifiers: _,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
-                execute!(stdout(), cursor::MoveLeft(1))?;
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Right,
-                modifiers: _,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
-                execute!(stdout(), cursor::MoveRight(1))?;
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Down,
-                modifiers: _,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
+    fn handle_event(&mut self) -> std::io::Result<()> {
+        let a = match event::read()? {
+            TerminalEvent::FocusGained => None,
+            TerminalEvent::FocusLost => None,
+            TerminalEvent::Key(e) => self.keymaps.map_key_press_to_event(e),
+            TerminalEvent::Mouse(_) => None,
+            TerminalEvent::Paste(_) => None,
+            TerminalEvent::Resize(_, _) => None,
+        };
+
+        if let Some(event) = a {
+            self.process_event(event)?;
+            self.render()?;
+        }
+        Ok(())
+    }
+
+    fn process_event(&mut self, event: Event) -> std::io::Result<()> {
+        match event {
+            Event::KeyPress(c) => self.handle_key_press(c)?,
+            Event::Exit => self.exit(),
+            Event::MoveCursor(pos) => self.terminal.move_cursor_to(pos),
+            Event::MoveCursorUp(u) => self.terminal.move_cursor_up(u)?,
+            Event::MoveCursorDown(u) => {
                 let size = self.terminal.size();
                 if cursor::position()?.1 < size.height - 2 {
-                    execute!(stdout(), cursor::MoveDown(1))?;
+                    self.terminal.move_cursor_down(u)?;
                 }
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Up,
-                modifiers: _,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
-                execute!(stdout(), cursor::MoveUp(1))?;
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char(c),
-                kind: KeyEventKind::Press,
-                modifiers: _,
-                state: _,
-            }) => {
-                self.handle_key_press(c)?;
-            }
-            /*Event::Key(c) if c.kind == KeyEventKind::Press => {
-
-            }*/
-            Event::Key(c) => {}
-            Event::Mouse(b) => {}
-            Event::Paste(a) => {}
-            Event::Resize(x, y) => {}
+            Event::MoveCursorLeft(u) => self.terminal.move_cursor_left(u)?,
+            Event::MoveCursorRight(u) => self.terminal.move_cursor_right(u)?,
         };
-        self.render()?;
         Ok(())
     }
 
     fn handle_key_press(&mut self, c: char) -> std::io::Result<()> {
-        if c == 'q' {
-            self.exit();
-        }
         print!("{}", c);
         Ok(())
     }
