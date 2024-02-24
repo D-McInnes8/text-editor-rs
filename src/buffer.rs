@@ -47,6 +47,16 @@ impl Span {
 }
 
 impl TextBuffer {
+    /// Constructs a new 'TextBuffer'.
+    ///
+    /// # Arguments
+    /// * 'text' - An optional parameter used to load text into the original buffer
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let buffer = TextBuffer::new(Stromg(String::from("Lorem ipsum dolor sit amet")));
+    /// ```
     pub fn new(text: Option<String>) -> TextBuffer {
         let mut buffer = TextBuffer {
             original: text.unwrap_or(String::new()),
@@ -63,17 +73,37 @@ impl TextBuffer {
         buffer
     }
 
+    /// Appends a section of text to the end of the document
+    ///
+    /// # Arguments
+    ///
+    /// * 'text' - The text that will be inserted at the end of the document
     pub fn append(&mut self, text: &str) {
         let pos = self.add_to_buffer(text);
         self.table.push(Span::new(BufferType::Add, pos, text.len()));
     }
 
+    /// Prepends a section of text to the start of the document.
+    ///
+    /// # Arguments
+    ///
+    /// * 'text' - The text that will be inserted at the start of the document
     pub fn prepend(&mut self, text: &str) {
         let pos = self.add_to_buffer(text);
         self.table
             .insert(0, Span::new(BufferType::Add, pos, text.len()));
     }
 
+    /// Inserts a section of text into the given position in the document. If the position is at
+    /// the start/end of the document, a new piece will be prepended/appended onto the table.
+    ///
+    /// If the position is in the middle of a piece, the piece will be split into two and a new
+    /// piece inserted between them.
+    ///
+    /// # Arguments
+    ///
+    /// * 'pos' - The position in the document where the text will be insert_end_of_line
+    /// * 'text' - The text that will be inserted at the speicified position
     pub fn insert(&mut self, pos: usize, text: &str) {
         info!("Inserting {} at position {}", text, pos);
 
@@ -115,15 +145,22 @@ impl TextBuffer {
         }
     }
 
+    /// Deletes a section of text from the table. This function will perform the following
+    /// depending on whether or not the start and end position are in the same piece:
+    ///
+    /// start and end are in the same piece:
+    ///     1. split the piece into two new pieces.
+    /// start and end are in different pieces:
+    ///     1. set new length for start piece.
+    ///     2. set new start for end piece.
+    ///     3. remove any pieces between these two pieces.
+    ///
+    /// # Arguments
+    ///
+    /// * 'start' - The position in the document where the text to be deleted starts
+    /// * 'end' - The position in the document where the text to tbe deleted ends
     pub fn delete(&mut self, start: usize, end: usize) {
         let len = end - start;
-
-        // start and end are in the same piece:
-        //     1. split the piece into two new pieces.
-        // start and end are in different pieces:
-        //     1. set new length for start piece.
-        //     2. set new start for end piece.
-        //     3. remove any pieces between these two pieces.
         let p1 = self.get_piece_at_position(start);
         let p2 = self.get_piece_at_position(end);
 
@@ -143,6 +180,16 @@ impl TextBuffer {
         };
     }
 
+    /// Deletes a section of text when it only resides on in a single piece.
+    /// Will split the piece into two new pieces.
+    ///
+    /// # Arguments
+    ///
+    /// * 'index' - The index of the piece to split in the piece table
+    /// * 'start' - The position within the span that the text to be deleted starts, relative to
+    /// the start of the span.
+    /// * 'end' - The position with the span that the text to be deleted ends, relative to the
+    /// start of the span.
     fn delete_split_piece(&mut self, index: usize, start: usize, end: usize) {
         // buffer   start length
         // original 0     22
@@ -160,6 +207,15 @@ impl TextBuffer {
         self.table.insert(index + 1, p2);
     }
 
+    /// Deletes a section of text from the piece table when it resides over multiple pieces.
+    /// Will modify the start/end of the first/last piece and delete any pieces between them.
+    ///
+    /// # Arguments
+    ///
+    /// * 'p1' - The piece where the start of the text to be deleted is located
+    /// * 'p2' - The piece where the end of the text to be deleted is located
+    /// * 'start' - The position in the document where the text to be deleted starts
+    /// * 'end' - The position in the document where the text to be deleted ends
     fn delete_multiple(
         &mut self,
         p1: &DocumentPiece,
@@ -191,6 +247,8 @@ impl TextBuffer {
         }
     }
 
+    /// Constructs the document stored in the piece table. If the table is empty it will return an
+    /// empty string. Note that this is an expensive operation, especially for large documents.
     pub fn text(&self) -> String {
         let mut text = String::new();
 
@@ -210,6 +268,11 @@ impl TextBuffer {
         text
     }
 
+    /// Generates the text for a single span in the piece table.
+    ///
+    /// # Arguments
+    ///
+    /// * 'span' - The span to generate text for
     pub fn get_span_contents(&self, span: &Span) -> &str {
         match span.buffer {
             BufferType::Add => &self.add[span.start..span.end],
@@ -217,6 +280,12 @@ impl TextBuffer {
         }
     }
 
+    /// Generates the text for a single span in the piece table with an initial offset.
+    ///
+    /// # Arguments
+    ///
+    /// * 'span' - The span to generate text for
+    /// * 'offset' - Will offset the span by this amount. Is relative to the start of the span
     pub fn get_span_contents_with_offset(&self, span: &Span, offset: usize) -> &str {
         let start_with_offset = span.start + offset;
         match span.buffer {
@@ -225,6 +294,20 @@ impl TextBuffer {
         }
     }
 
+    /// Generates the text for a line within the document. Does not include new line characters in
+    /// the result. Line numbers start from 1, so requesting line 0 will always return a None result.
+    ///
+    /// # Arguments
+    ///
+    /// * 'line' - The line number to generate the text for.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.")));
+    /// let content = buffer.get_line_content(2);
+    /// assert_eq!(Some(String::from("Praesent ultricies lacus ut molestie dapibus.")), content);
+    /// ```
     pub fn get_line_content(&self, line: u32) -> Option<String> {
         let mut result = String::new();
 
