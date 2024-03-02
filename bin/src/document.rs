@@ -4,8 +4,7 @@ use std::ops::Range;
 use std::path::PathBuf;
 
 use log::info;
-
-use crate::buffer::TextBuffer;
+use text_buffer::TextBuffer;
 
 pub struct Document {
     buffer: TextBuffer,

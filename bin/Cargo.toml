@@ -16,3 +16,7 @@ unicode-width = "0.1.11"
 [dev-dependencies]
 criterion = "0.5.1"
 test-case = "3.3.1"
+
+[dependencies.text-buffer]
+version = "0.1.0"
+path = "../crates/text-buffer"

@@ -8,7 +8,6 @@ use structured_logger::Builder;
 
 use self::editor::Editor;
 
-pub mod buffer;
 mod document;
 mod editor;
 mod keymaps;
