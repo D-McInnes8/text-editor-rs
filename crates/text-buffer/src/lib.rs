@@ -233,19 +233,14 @@ impl TextBuffer {
     ) {
         // update the first piece.
         let p1_len_to_delete = p1.doc.end - start;
-        let p1_new_end = p1.span.end - p1_len_to_delete;
         let p1_new_len = p1.span.len - p1_len_to_delete;
 
-        //self.table[p1.index].end = p1_new_end;
-        //self.table[p1.index].len = p1_new_len;
         self.table[p1.index] = self.create_span(p1.span.buffer, p1.span.start, p1_new_len);
 
         // update the final piece.
         let p2_new_len = p2.doc.end - end;
         let p2_new_start = p2.span.end - p2_new_len;
 
-        //self.table[p2.index].len = p2_new_len;
-        //self.table[p2.index].start = p2_new_start;
         self.table[p2.index] = self.create_span(p2.span.buffer, p2_new_start, p2_new_len);
 
         // remove and pieces between the two pieces.
@@ -345,11 +340,9 @@ impl TextBuffer {
                 let text = self.get_span_contents(&span);
 
                 // find the next new line character and return once it's found.
-                for (pos, c) in text.chars().enumerate() {
-                    if is_newline_char(c) {
-                        result += &text[..pos];
-                        return Some(result);
-                    }
+                for pos in &span.lines {
+                    result += &text[..*pos];
+                    return Some(result);
                 }
 
                 // no new line characters in this piece, so add the entire piece to the result.
@@ -365,13 +358,10 @@ impl TextBuffer {
         let mut index = 0;
 
         for piece in &self.table {
-            let contents = self.get_span_contents(&piece);
-            for (pos, c) in contents.chars().enumerate() {
-                if is_newline_char(c) {
-                    current_line += 1;
-                    if current_line == line {
-                        return Some(self.get_line_content_until_next_linebreak(index, pos));
-                    }
+            for pos in &piece.lines {
+                current_line += 1;
+                if current_line == line {
+                    return Some(self.get_line_content_until_next_linebreak(index, *pos));
                 }
             }
 
@@ -394,11 +384,15 @@ impl TextBuffer {
             };
 
             // find the next new line character and return once it's found.
-            for (pos, c) in text.chars().enumerate() {
-                if is_newline_char(c) {
-                    result += &text[..pos];
-                    return result;
+            for pos in &span.lines {
+                if i == index && *pos <= offset {
+                    continue;
                 }
+
+                let end_pos = if i == index { *pos - offset - 1 } else { *pos };
+
+                result += &text[..end_pos];
+                return result;
             }
 
             // no new line characters in this piece. If it's the origina span, calculate the
@@ -434,9 +428,11 @@ impl TextBuffer {
 
     fn create_span(&self, buffer: BufferType, start: usize, len: usize) -> Span {
         let end = start + len;
-
         assert!(start <= end, "Attempting to create a span for the {:?} buffer with a start index ({}) greater than it's end index ({}).", buffer, start, end);
+        debug_assert!(len != 0, "Attempting to create a span with 0 length.");
 
+        // Cache new line character positions so we don't have to iterate over the text each time
+        // we want to get line numbers.
         let mut lines = vec![];
         let contents = self.get_buffer_contents(buffer, start, end);
         for (pos, c) in contents.chars().enumerate() {
@@ -710,6 +706,7 @@ mod tests {
         let expected = Some(String::from(
             "Nam diam lorem, efficitur nec mauris eget, ultrices molestie mi.",
         ));
+        eprintln!("{:?}", &buffer.table);
         let actual = buffer.get_line_content(3);
         assert_eq!(expected, actual);
     }
@@ -722,6 +719,17 @@ mod tests {
 
         let expected = None;
         let actual = buffer.get_line_content(5);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn get_line_content_large_document() {
+        let ipsum_path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/ipsum");
+        let text = std::fs::read_to_string(ipsum_path).expect("Unable to find file.");
+        let buffer = TextBuffer::new(Some(text));
+
+        let expected = Some(String::from("Nullam mollis orci et mi gravida semper."));
+        let actual = buffer.get_line_content(50000);
         assert_eq!(expected, actual);
     }
 
