@@ -13,15 +13,16 @@ pub enum BufferType {
     Add,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Span {
     buffer: BufferType,
     start: usize,
     end: usize,
     len: usize,
+    lines: Vec<usize>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct DocumentPiece {
     index: usize,
     span: Span,
@@ -35,12 +36,13 @@ pub struct DocumentSpan {
 }
 
 impl Span {
-    pub fn new(buffer: BufferType, start: usize, len: usize) -> Span {
+    pub fn new(buffer: BufferType, start: usize, len: usize, lines: Vec<usize>) -> Span {
         Span {
             buffer,
             start,
             end: start + len,
             len,
+            lines,
         }
     }
 }
@@ -57,18 +59,24 @@ impl TextBuffer {
     /// let buffer = TextBuffer::new(Stromg(String::from("Lorem ipsum dolor sit amet")));
     /// ```
     pub fn new(text: Option<String>) -> TextBuffer {
-        let mut buffer = TextBuffer {
-            original: text.unwrap_or(String::new()),
-            add: String::new(),
-            table: Vec::with_capacity(500),
-        };
+        if let Some(txt) = text {
+            let mut buffer = TextBuffer {
+                original: txt,
+                add: String::new(),
+                table: Vec::with_capacity(500),
+            };
 
-        buffer
-            .table
-            .push(buffer.create_span(BufferType::Original, 0, buffer.original.len()));
-
-        info!("{:?}", &buffer);
-        buffer
+            buffer
+                .table
+                .push(buffer.create_span(BufferType::Original, 0, buffer.original.len()));
+            return buffer;
+        } else {
+            return TextBuffer {
+                original: String::new(),
+                add: String::new(),
+                table: Vec::with_capacity(500),
+            };
+        }
     }
 
     /// Appends a section of text to the end of the document
@@ -325,6 +333,10 @@ impl TextBuffer {
     /// assert_eq!(Some(String::from("Praesent ultricies lacus ut molestie dapibus.")), content);
     /// ```
     pub fn get_line_content(&self, line: u32) -> Option<String> {
+        if self.table.is_empty() {
+            return None;
+        }
+
         let mut result = String::new();
 
         // special case if accessing the first line number
@@ -425,8 +437,15 @@ impl TextBuffer {
 
         assert!(start <= end, "Attempting to create a span for the {:?} buffer with a start index ({}) greater than it's end index ({}).", buffer, start, end);
 
+        let mut lines = vec![];
         let contents = self.get_buffer_contents(buffer, start, end);
-        Span::new(buffer, start, len)
+        for (pos, c) in contents.chars().enumerate() {
+            if is_newline_char(c) {
+                lines.push(pos);
+            }
+        }
+
+        Span::new(buffer, start, len, lines)
     }
 
     fn get_piece_at_position(&self, pos: usize) -> Option<DocumentPiece> {
@@ -483,24 +502,28 @@ mod tests {
                     start: 0,
                     len: 6,
                     end: 6,
+                    lines: vec![],
                 },
                 Span {
                     buffer: BufferType::Original,
                     start: 0,
                     len: 5,
                     end: 5,
+                    lines: vec![],
                 },
                 Span {
                     buffer: BufferType::Add,
                     start: 17,
                     len: 6,
                     end: 23,
+                    lines: vec![],
                 },
                 Span {
                     buffer: BufferType::Original,
                     start: 5,
                     len: 9,
                     end: 14,
+                    lines: vec![],
                 },
             ],
         };
@@ -713,6 +736,7 @@ mod tests {
         let buffer = TextBuffer::new(Some(String::from(
             "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
         )));
+
         assert_eq!(1, buffer.get_line_count());
     }
 
@@ -721,5 +745,25 @@ mod tests {
         let mut buffer = TextBuffer::new(Some(String::from("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.")));
         buffer.append("\nNam diam lorem, efficitur nec mauris eget, ultrices molestie mi.\nSed varius magna quis maximus mattis.");
         assert_eq!(4, buffer.get_line_count());
+    }
+
+    #[test]
+    fn cache_line_numbers_no_new_line_characters() {
+        let mut buffer = TextBuffer::new(None);
+        buffer.append("Lorem ipsum dolor sit amet, consectetur adipiscing elit.");
+
+        let expected: &Vec<usize> = &vec![];
+        let actual = &buffer.table.first().expect("Piece table is empty").lines;
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn cache_line_numbers_multiple_new_line_characters() {
+        let mut buffer = TextBuffer::new(None);
+        buffer.append("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nPraesent ultricies lacus ut molestie dapibus.");
+
+        let expected = &vec![56];
+        let actual = &buffer.table.first().expect("Piece table is empty").lines;
+        assert_eq!(expected, actual);
     }
 }
