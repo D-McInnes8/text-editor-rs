@@ -5,7 +5,6 @@ pub struct TextBuffer {
     original: String,
     add: String,
     table: Vec<Span>,
-    lines: Vec<usize>,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -62,12 +61,11 @@ impl TextBuffer {
             original: text.unwrap_or(String::new()),
             add: String::new(),
             table: Vec::with_capacity(500),
-            lines: Vec::with_capacity(10),
         };
 
         buffer
             .table
-            .push(Span::new(BufferType::Original, 0, buffer.original.len()));
+            .push(buffer.create_span(BufferType::Original, 0, buffer.original.len()));
 
         info!("{:?}", &buffer);
         buffer
@@ -80,7 +78,8 @@ impl TextBuffer {
     /// * 'text' - The text that will be inserted at the end of the document
     pub fn append(&mut self, text: &str) {
         let pos = self.add_to_buffer(text);
-        self.table.push(Span::new(BufferType::Add, pos, text.len()));
+        self.table
+            .push(self.create_span(BufferType::Add, pos, text.len()));
     }
 
     /// Prepends a section of text to the start of the document.
@@ -91,7 +90,7 @@ impl TextBuffer {
     pub fn prepend(&mut self, text: &str) {
         let pos = self.add_to_buffer(text);
         self.table
-            .insert(0, Span::new(BufferType::Add, pos, text.len()));
+            .insert(0, self.create_span(BufferType::Add, pos, text.len()));
     }
 
     /// Inserts a section of text into the given position in the document. If the position is at
@@ -129,9 +128,10 @@ impl TextBuffer {
             );
             let pos_in_add_buffer = self.add_to_buffer(text);
 
-            let piece1 = Span::new(piece.span.buffer, piece.span.start, pos - piece.doc.start); //pos_in_document + pos);
-            let piece2 = Span::new(BufferType::Add, pos_in_add_buffer, text.len());
-            let piece3 = Span::new(
+            let piece1 =
+                self.create_span(piece.span.buffer, piece.span.start, pos - piece.doc.start); //pos_in_document + pos);
+            let piece2 = self.create_span(BufferType::Add, pos_in_add_buffer, text.len());
+            let piece3 = self.create_span(
                 piece.span.buffer,
                 piece1.start + piece1.len,
                 piece.span.len - (piece1.start + piece1.len),
@@ -200,8 +200,8 @@ impl TextBuffer {
         // original 0     15     (ex.start) (start)
         // original 20    22     (ex.start + end) (ex.length - end)
         let ex = &self.table[index];
-        let p1 = Span::new(ex.buffer, ex.start, start);
-        let p2 = Span::new(ex.buffer, ex.start + end, ex.len - end);
+        let p1 = self.create_span(ex.buffer, ex.start, start);
+        let p2 = self.create_span(ex.buffer, ex.start + end, ex.len - end);
 
         self.table[index] = p1;
         self.table.insert(index + 1, p2);
@@ -228,15 +228,17 @@ impl TextBuffer {
         let p1_new_end = p1.span.end - p1_len_to_delete;
         let p1_new_len = p1.span.len - p1_len_to_delete;
 
-        self.table[p1.index].end = p1_new_end;
-        self.table[p1.index].len = p1_new_len;
+        //self.table[p1.index].end = p1_new_end;
+        //self.table[p1.index].len = p1_new_len;
+        self.table[p1.index] = self.create_span(p1.span.buffer, p1.span.start, p1_new_len);
 
         // update the final piece.
         let p2_new_len = p2.doc.end - end;
         let p2_new_start = p2.span.end - p2_new_len;
 
-        self.table[p2.index].len = p2_new_len;
-        self.table[p2.index].start = p2_new_start;
+        //self.table[p2.index].len = p2_new_len;
+        //self.table[p2.index].start = p2_new_start;
+        self.table[p2.index] = self.create_span(p2.span.buffer, p2_new_start, p2_new_len);
 
         // remove and pieces between the two pieces.
         if p2.index - p1.index > 1 {
@@ -253,16 +255,7 @@ impl TextBuffer {
         let mut text = String::new();
 
         for row in &self.table {
-            match row.buffer {
-                BufferType::Original => {
-                    let c = &self.original[row.start..(row.start + row.len)];
-                    text += c;
-                }
-                BufferType::Add => {
-                    let c = &self.add[row.start..(row.start + row.len)];
-                    text += c;
-                }
-            }
+            text += self.get_span_contents(row);
         }
 
         text
@@ -274,10 +267,17 @@ impl TextBuffer {
     ///
     /// * 'span' - The span to generate text for
     pub fn get_span_contents(&self, span: &Span) -> &str {
-        match span.buffer {
-            BufferType::Add => &self.add[span.start..span.end],
-            BufferType::Original => &self.original[span.start..span.end],
-        }
+        assert!(span.start <= span.end, "Attempting to get the contents for a span with a start index ({}) greater than it's end index ({}).", span.start, span.end);
+
+        let buffer = match span.buffer {
+            BufferType::Add => &self.add,
+            BufferType::Original => &self.original,
+        };
+
+        assert!(span.start <= buffer.len(), "Out of bounds index for {:?} buffer. Attempting to access index {} on a buffer of size {}", span.buffer,span.start, buffer.len());
+        assert!(span.end <= buffer.len(), "Out of bounds index for {:?} buffer. Attempting to access index {} on a buffer of size {}", span.buffer, span.end, buffer.len());
+
+        &buffer[span.start..span.end]
     }
 
     /// Generates the text for a single span in the piece table with an initial offset.
@@ -287,11 +287,27 @@ impl TextBuffer {
     /// * 'span' - The span to generate text for
     /// * 'offset' - Will offset the span by this amount. Is relative to the start of the span
     pub fn get_span_contents_with_offset(&self, span: &Span, offset: usize) -> &str {
+        assert!(span.start <= span.end, "Attempting to get the contents for a span with a start index ({}) greater than it's end index ({}).", span.start, span.end);
+
         let start_with_offset = span.start + offset;
         match span.buffer {
             BufferType::Add => &self.add[start_with_offset..span.end],
             BufferType::Original => &self.original[start_with_offset..span.end],
         }
+    }
+
+    pub fn get_buffer_contents(&self, buffer_type: BufferType, start: usize, end: usize) -> &str {
+        assert!(start <= end, "Attempting to get the contents for a span with a start index ({}) greater than it's end index ({}).", start, end);
+
+        let buffer = match buffer_type {
+            BufferType::Add => &self.add,
+            BufferType::Original => &self.original,
+        };
+
+        assert!(start <= buffer.len(), "Out of bounds index for {:?} buffer. Attempting to access index {} on a buffer of size {}", buffer_type, start, buffer.len());
+        assert!(end <= buffer.len(), "Out of bounds index for {:?} buffer. Attempting to access index {} on a buffer of size {}", buffer_type, end, buffer.len());
+
+        &buffer[start..end]
     }
 
     /// Generates the text for a line within the document. Does not include new line characters in
@@ -404,6 +420,15 @@ impl TextBuffer {
         pos
     }
 
+    fn create_span(&self, buffer: BufferType, start: usize, len: usize) -> Span {
+        let end = start + len;
+
+        assert!(start <= end, "Attempting to create a span for the {:?} buffer with a start index ({}) greater than it's end index ({}).", buffer, start, end);
+
+        let contents = self.get_buffer_contents(buffer, start, end);
+        Span::new(buffer, start, len)
+    }
+
     fn get_piece_at_position(&self, pos: usize) -> Option<DocumentPiece> {
         let mut current_pos = 0;
 
@@ -431,7 +456,7 @@ impl TextBuffer {
 
     fn doc_len(&self) -> usize {
         let mut current_pos = 0;
-        for (i, piece) in self.table.iter().enumerate() {
+        for (_, piece) in self.table.iter().enumerate() {
             current_pos += piece.len;
         }
         current_pos
@@ -452,7 +477,6 @@ mod tests {
         let buffer = TextBuffer {
             original: String::from("ipsum sit amet"),
             add: String::from("Lorem deletedtext dolor"),
-            lines: vec![],
             table: vec![
                 Span {
                     buffer: BufferType::Add,
