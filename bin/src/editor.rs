@@ -57,7 +57,6 @@ impl Editor {
         self.terminal.startup()?;
 
         while !self.exit {
-            //self.read_key_press()?;
             self.handle_event()?;
         }
 
@@ -106,10 +105,36 @@ impl Editor {
                 if cursor::position()?.1 < size.height - 2 {
                     self.terminal.move_cursor_down(u)?;
                 }
+                if let Some(document) = &self.document {
+                    let size = self.terminal.size();
+                    let pos = self.terminal.cursor_pos();
+                    let lines = document.get_lines(std::ops::Range {
+                        start: 1,
+                        end: (size.height - 1) as u32,
+                    });
+
+                    if (pos.x as usize) > (lines[pos.y as usize].len()) {
+                        self.terminal.move_cursor_to(CursorPosition {
+                            x: lines[pos.y as usize].len() as u16,
+                            y: pos.y,
+                        })
+                    }
+                }
             }
             Event::MoveCursorLeft(u) => self.terminal.move_cursor_left(u)?,
             Event::MoveCursorRight(u) => {
-                self.terminal.move_cursor_right(u)?;
+                if let Some(document) = &self.document {
+                    let size = self.terminal.size();
+                    let pos = self.terminal.cursor_pos();
+                    let lines = document.get_lines(std::ops::Range {
+                        start: 1,
+                        end: (size.height - 1) as u32,
+                    });
+
+                    if (pos.x as usize) < (lines[pos.y as usize].len()) {
+                        self.terminal.move_cursor_right(u)?;
+                    }
+                }
             }
             Event::NewLine => self.new_line(),
         };
@@ -133,7 +158,7 @@ impl Editor {
     fn render_status_line(&self) -> String {
         // Cursor position
         let (x, y) = cursor::position().expect("");
-        let pos = format!("{}, {}", x + 1, y + 1);
+        let pos = format!("({}), {}, {}", 0, x + 1, y + 1);
 
         let (width, _) = terminal::size().expect("");
         let space_length = width as usize - self.status.len() - pos.len();
