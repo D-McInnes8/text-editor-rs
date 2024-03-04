@@ -32,6 +32,12 @@ impl KeyMaps {
                 state: _,
             } => Some(Event::MoveCursorDown(1)),
             KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: _,
+                kind: KeyEventKind::Press,
+                state: _,
+            } => Some(Event::NewLine),
+            KeyEvent {
                 code: KeyCode::Char(c),
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,

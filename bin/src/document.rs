@@ -1,5 +1,6 @@
 use std::error::Error;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
+use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -9,6 +10,7 @@ use text_buffer::TextBuffer;
 pub struct Document {
     buffer: TextBuffer,
     path: Option<PathBuf>,
+    name: Option<OsString>,
 }
 
 impl Document {
@@ -16,28 +18,32 @@ impl Document {
         Document {
             buffer: TextBuffer::new(None),
             path: None,
+            name: None,
         }
     }
 
     pub fn load(file: PathBuf) -> Result<Document, Box<dyn Error>> {
+        let file_name = file.file_name().map(|f| f.to_owned());
         let contents = std::fs::read_to_string(&file)?;
-        info!(
-            "Loaded {} characters from document {:?}",
-            contents.len(),
-            file
-        );
+        let len = contents.len();
+        let buffer = TextBuffer::new(Some(contents));
 
+        debug_assert_eq!(len, buffer.doc_len());
+        debug_assert!(file_name.is_some());
+
+        info!("Loaded {} characters from document {:?}", len, file);
         Ok(Document {
-            buffer: TextBuffer::new(Some(contents)),
+            buffer,
             path: Some(file),
+            name: file_name,
         })
     }
 
-    pub fn file_name(&self) -> Option<&OsStr> {
+    pub fn save(&self) -> Result<(), Box<dyn Error>> {
         if let Some(path) = &self.path {
-            return path.file_name();
+            fs::write(path, self.buffer.text())?;
         }
-        None
+        Ok(())
     }
 
     pub fn get_lines(&self, lines: Range<u32>) -> Vec<String> {

@@ -469,7 +469,7 @@ impl TextBuffer {
         None
     }
 
-    fn doc_len(&self) -> usize {
+    pub fn doc_len(&self) -> usize {
         let mut current_pos = 0;
         for (_, piece) in self.table.iter().enumerate() {
             current_pos += piece.len;

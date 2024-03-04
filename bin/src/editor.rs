@@ -29,6 +29,7 @@ pub enum Event {
     MoveCursorDown(u16),
     MoveCursorLeft(u16),
     MoveCursorRight(u16),
+    NewLine,
 }
 
 impl Editor {
@@ -107,7 +108,10 @@ impl Editor {
                 }
             }
             Event::MoveCursorLeft(u) => self.terminal.move_cursor_left(u)?,
-            Event::MoveCursorRight(u) => self.terminal.move_cursor_right(u)?,
+            Event::MoveCursorRight(u) => {
+                self.terminal.move_cursor_right(u)?;
+            }
+            Event::NewLine => self.new_line(),
         };
         Ok(())
     }
@@ -115,6 +119,15 @@ impl Editor {
     fn handle_key_press(&mut self, c: char) -> std::io::Result<()> {
         print!("{}", c);
         Ok(())
+    }
+
+    fn new_line(&mut self) {
+        if self.terminal.cursor_pos().y < self.terminal.size().height - 2 {
+            self.terminal.move_cursor_to(CursorPosition {
+                x: 0,
+                y: self.terminal.cursor_pos().y + 1,
+            });
+        }
     }
 
     fn render_status_line(&self) -> String {
