@@ -5,6 +5,7 @@ use crossterm::event::Event as TerminalEvent;
 use crossterm::terminal;
 use std::error::Error;
 use std::io;
+use std::ops::Range;
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
 
@@ -15,6 +16,7 @@ use crate::terminal::Terminal;
 
 pub struct Editor {
     column: u16,
+    row: u32,
     document: Option<Document>,
     exit: bool,
     keymaps: KeyMaps,
@@ -39,6 +41,7 @@ impl Editor {
     pub fn new() -> Editor {
         Editor {
             column: 0,
+            row: 1,
             document: None,
             exit: false,
             keymaps: KeyMaps {},
@@ -82,7 +85,7 @@ impl Editor {
             let size = self.terminal.size();
             self.lines = document.get_lines(std::ops::Range {
                 start: 1,
-                end: (size.height - 1) as u32,
+                end: (size.height) as u32,
             });
 
             self.document = Some(document);
@@ -136,6 +139,10 @@ impl Editor {
     fn move_cursor_up(&mut self, offset: u16) -> std::io::Result<()> {
         self.terminal.move_cursor_up(offset)?;
         self.check_cursor_pos()?;
+
+        if self.row != 1 {
+            self.row -= 1;
+        }
         Ok(())
     }
 
@@ -143,9 +150,23 @@ impl Editor {
         let size = self.terminal.size();
         let pos = self.terminal.cursor_pos();
         if pos.y < size.height - 2 {
-            if pos.y as usize <= self.lines.len() - 3 {
+            if pos.y as usize <= self.lines.len() - 1 {
+                self.row += 1;
                 self.terminal.move_cursor_down(offset)?;
                 self.check_cursor_pos()?;
+            }
+        } else {
+            if let Some(document) = &self.document {
+                let line_count = document.line_count();
+                let size = self.terminal.size();
+
+                if self.row < line_count {
+                    self.row += 1;
+                    self.lines = document.get_lines(Range {
+                        start: self.row - size.height as u32,
+                        end: self.row,
+                    });
+                }
             }
         }
         Ok(())
@@ -198,7 +219,7 @@ impl Editor {
     fn render_status_line(&self) -> String {
         // Cursor position
         let (x, y) = cursor::position().expect("");
-        let pos = format!("({}), {}, {}", 0, x + 1, y + 1);
+        let pos = format!("({}), {}, {}", self.row, x + 1, y + 1);
 
         let (width, _) = terminal::size().expect("");
         let space_length = width as usize - self.status.len() - pos.len();

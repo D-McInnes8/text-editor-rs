@@ -46,6 +46,14 @@ impl Document {
         Ok(())
     }
 
+    pub fn len(&self) -> u32 {
+        self.buffer.doc_len() as u32
+    }
+
+    pub fn line_count(&self) -> u32 {
+        self.buffer.get_line_count()
+    }
+
     pub fn get_lines(&self, lines: Range<u32>) -> Vec<String> {
         let mut results = vec![];
         info!("Fetching lines from document with range {:?}", lines);
