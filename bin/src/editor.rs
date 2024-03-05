@@ -14,9 +14,11 @@ use crate::terminal::CursorPosition;
 use crate::terminal::Terminal;
 
 pub struct Editor {
+    column: u16,
     document: Option<Document>,
     exit: bool,
     keymaps: KeyMaps,
+    should_render: bool,
     status: String,
     terminal: Terminal,
 }
@@ -35,9 +37,11 @@ pub enum Event {
 impl Editor {
     pub fn new() -> Editor {
         Editor {
+            column: 0,
             document: None,
             exit: false,
             keymaps: KeyMaps {},
+            should_render: true,
             status: String::from("Document"),
             terminal: Terminal::new(),
         }
@@ -73,6 +77,8 @@ impl Editor {
         if let Some(path) = file {
             let document = Document::load(path)?;
             self.document = Some(document);
+            self.terminal.move_cursor_to(CursorPosition { x: 0, y: 0 });
+            self.render()?;
         }
         Ok(())
     }
@@ -89,54 +95,25 @@ impl Editor {
 
         if let Some(event) = a {
             self.process_event(event)?;
-            self.render()?;
+            if self.should_render {
+                self.should_render = false;
+                self.render()?;
+            }
         }
         Ok(())
     }
 
     fn process_event(&mut self, event: Event) -> std::io::Result<()> {
+        self.should_render = true;
         match event {
             Event::KeyPress(c) => self.handle_key_press(c)?,
             Event::Exit => self.exit(),
             Event::MoveCursor(pos) => self.terminal.move_cursor_to(pos),
-            Event::MoveCursorUp(u) => self.terminal.move_cursor_up(u)?,
-            Event::MoveCursorDown(u) => {
-                let size = self.terminal.size();
-                if cursor::position()?.1 < size.height - 2 {
-                    self.terminal.move_cursor_down(u)?;
-                }
-                if let Some(document) = &self.document {
-                    let size = self.terminal.size();
-                    let pos = self.terminal.cursor_pos();
-                    let lines = document.get_lines(std::ops::Range {
-                        start: 1,
-                        end: (size.height - 1) as u32,
-                    });
-
-                    if (pos.x as usize) > (lines[pos.y as usize].len()) {
-                        self.terminal.move_cursor_to(CursorPosition {
-                            x: lines[pos.y as usize].len() as u16,
-                            y: pos.y,
-                        })
-                    }
-                }
-            }
-            Event::MoveCursorLeft(u) => self.terminal.move_cursor_left(u)?,
-            Event::MoveCursorRight(u) => {
-                if let Some(document) = &self.document {
-                    let size = self.terminal.size();
-                    let pos = self.terminal.cursor_pos();
-                    let lines = document.get_lines(std::ops::Range {
-                        start: 1,
-                        end: (size.height - 1) as u32,
-                    });
-
-                    if (pos.x as usize) < (lines[pos.y as usize].len()) {
-                        self.terminal.move_cursor_right(u)?;
-                    }
-                }
-            }
-            Event::NewLine => self.new_line(),
+            Event::MoveCursorUp(o) => self.move_cursor_up(o)?,
+            Event::MoveCursorDown(o) => self.move_cursor_down(o)?,
+            Event::MoveCursorLeft(o) => self.move_cursor_left(o)?,
+            Event::MoveCursorRight(o) => self.move_cursor_right(o)?,
+            Event::NewLine => self.handle_new_line(),
         };
         Ok(())
     }
@@ -146,7 +123,72 @@ impl Editor {
         Ok(())
     }
 
-    fn new_line(&mut self) {
+    fn move_cursor_up(&mut self, offset: u16) -> std::io::Result<()> {
+        self.terminal.move_cursor_up(offset)?;
+        self.check_cursor_pos()?;
+        Ok(())
+    }
+
+    fn move_cursor_down(&mut self, offset: u16) -> std::io::Result<()> {
+        let size = self.terminal.size();
+        if cursor::position()?.1 < size.height - 2 {
+            self.terminal.move_cursor_down(offset)?;
+            self.check_cursor_pos()?;
+        }
+        Ok(())
+    }
+
+    fn move_cursor_left(&mut self, offset: u16) -> std::io::Result<()> {
+        self.terminal.move_cursor_left(offset)?;
+        self.column = self.terminal.cursor_pos().x;
+        Ok(())
+    }
+
+    fn move_cursor_right(&mut self, offset: u16) -> std::io::Result<()> {
+        if let Some(document) = &self.document {
+            let size = self.terminal.size();
+            let pos = self.terminal.cursor_pos();
+            let lines = document.get_lines(std::ops::Range {
+                start: 1,
+                end: (size.height - 1) as u32,
+            });
+
+            if (pos.x as usize) < (lines[pos.y as usize].len()) {
+                self.terminal.move_cursor_right(offset)?;
+                self.column = self.terminal.cursor_pos().x;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_cursor_pos(&mut self) -> std::io::Result<()> {
+        let size = self.terminal.size();
+        let pos = self.terminal.cursor_pos();
+
+        if let Some(document) = &self.document {
+            let lines = document.get_lines(std::ops::Range {
+                start: 1,
+                end: (size.height - 1) as u32,
+            });
+
+            let y_index = pos.y as usize;
+            if pos.x != self.column && self.column as usize <= (lines[y_index].len()) {
+                self.terminal.move_cursor_to(CursorPosition {
+                    x: self.column,
+                    y: pos.y,
+                });
+            }
+            if self.column as usize > (lines[y_index].len()) {
+                self.terminal.move_cursor_to(CursorPosition {
+                    x: lines[pos.y as usize].len() as u16,
+                    y: pos.y,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_new_line(&mut self) {
         if self.terminal.cursor_pos().y < self.terminal.size().height - 2 {
             self.terminal.move_cursor_to(CursorPosition {
                 x: 0,
