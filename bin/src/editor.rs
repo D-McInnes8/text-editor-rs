@@ -18,6 +18,7 @@ pub struct Editor {
     document: Option<Document>,
     exit: bool,
     keymaps: KeyMaps,
+    lines: Vec<String>,
     should_render: bool,
     status: String,
     terminal: Terminal,
@@ -41,6 +42,7 @@ impl Editor {
             document: None,
             exit: false,
             keymaps: KeyMaps {},
+            lines: vec![],
             should_render: true,
             status: String::from("Document"),
             terminal: Terminal::new(),
@@ -76,8 +78,16 @@ impl Editor {
     pub fn load(&mut self, file: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         if let Some(path) = file {
             let document = Document::load(path)?;
+
+            let size = self.terminal.size();
+            self.lines = document.get_lines(std::ops::Range {
+                start: 1,
+                end: (size.height - 1) as u32,
+            });
+
             self.document = Some(document);
             self.terminal.move_cursor_to(CursorPosition { x: 0, y: 0 });
+
             self.render()?;
         }
         Ok(())
@@ -131,9 +141,12 @@ impl Editor {
 
     fn move_cursor_down(&mut self, offset: u16) -> std::io::Result<()> {
         let size = self.terminal.size();
-        if cursor::position()?.1 < size.height - 2 {
-            self.terminal.move_cursor_down(offset)?;
-            self.check_cursor_pos()?;
+        let pos = self.terminal.cursor_pos();
+        if pos.y < size.height - 2 {
+            if pos.y as usize <= self.lines.len() - 3 {
+                self.terminal.move_cursor_down(offset)?;
+                self.check_cursor_pos()?;
+            }
         }
         Ok(())
     }
@@ -145,45 +158,30 @@ impl Editor {
     }
 
     fn move_cursor_right(&mut self, offset: u16) -> std::io::Result<()> {
-        if let Some(document) = &self.document {
-            let size = self.terminal.size();
-            let pos = self.terminal.cursor_pos();
-            let lines = document.get_lines(std::ops::Range {
-                start: 1,
-                end: (size.height - 1) as u32,
-            });
+        let pos = self.terminal.cursor_pos();
 
-            if (pos.x as usize) < (lines[pos.y as usize].len()) {
-                self.terminal.move_cursor_right(offset)?;
-                self.column = self.terminal.cursor_pos().x;
-            }
+        if (pos.x as usize) < (self.lines[pos.y as usize].len()) {
+            self.terminal.move_cursor_right(offset)?;
+            self.column = self.terminal.cursor_pos().x;
         }
         Ok(())
     }
 
     fn check_cursor_pos(&mut self) -> std::io::Result<()> {
-        let size = self.terminal.size();
         let pos = self.terminal.cursor_pos();
 
-        if let Some(document) = &self.document {
-            let lines = document.get_lines(std::ops::Range {
-                start: 1,
-                end: (size.height - 1) as u32,
+        let y_index = pos.y as usize;
+        if pos.x != self.column && self.column as usize <= (self.lines[y_index].len()) {
+            self.terminal.move_cursor_to(CursorPosition {
+                x: self.column,
+                y: pos.y,
             });
-
-            let y_index = pos.y as usize;
-            if pos.x != self.column && self.column as usize <= (lines[y_index].len()) {
-                self.terminal.move_cursor_to(CursorPosition {
-                    x: self.column,
-                    y: pos.y,
-                });
-            }
-            if self.column as usize > (lines[y_index].len()) {
-                self.terminal.move_cursor_to(CursorPosition {
-                    x: lines[pos.y as usize].len() as u16,
-                    y: pos.y,
-                });
-            }
+        }
+        if self.column as usize > (self.lines[y_index].len()) {
+            self.terminal.move_cursor_to(CursorPosition {
+                x: self.lines[pos.y as usize].len() as u16,
+                y: pos.y,
+            });
         }
         Ok(())
     }
@@ -215,34 +213,34 @@ impl Editor {
         let size = self.terminal.size();
 
         let mut buffer = String::new();
-        if let Some(document) = &self.document {
-            let lines = document.get_lines(std::ops::Range {
-                start: 1,
-                end: (size.height - 1) as u32,
-            });
+        //if let Some(document) = &self.document {
+        /*let lines = document.get_lines(std::ops::Range {
+            start: 1,
+            end: (size.height - 1) as u32,
+        });*/
 
-            for row in 0..size.height {
-                if row == size.height - 1 {
-                    buffer += self.render_status_line().as_str();
-                } else {
-                    /*let line = lines[row as usize].as_str();
-                    info!(
-                        "Unicode Width: {}, Normal Width: {}",
-                        UnicodeWidthStr::width_cjk(line),
-                        line.len()
-                    );*/
-                    if (row as usize) < lines.len() {
-                        if lines[row as usize].len() > size.width as usize {
-                            buffer += &lines[row as usize][0..size.width as usize];
-                        } else {
-                            buffer += &lines[row as usize];
-                        }
+        for row in 0..size.height {
+            if row == size.height - 1 {
+                buffer += self.render_status_line().as_str();
+            } else {
+                /*let line = lines[row as usize].as_str();
+                info!(
+                    "Unicode Width: {}, Normal Width: {}",
+                    UnicodeWidthStr::width_cjk(line),
+                    line.len()
+                );*/
+                if (row as usize) < self.lines.len() {
+                    if self.lines[row as usize].len() > size.width as usize {
+                        buffer += &self.lines[row as usize][0..size.width as usize];
+                    } else {
+                        buffer += &self.lines[row as usize];
                     }
-                    buffer += "\r\n";
-                    //buffer += "\n";
                 }
+                buffer += "\r\n";
+                //buffer += "\n";
             }
         }
+        //}
 
         self.terminal.render(buffer)
     }
