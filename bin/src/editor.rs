@@ -137,11 +137,24 @@ impl Editor {
     }
 
     fn move_cursor_up(&mut self, offset: u16) -> std::io::Result<()> {
-        self.terminal.move_cursor_up(offset)?;
-        self.check_cursor_pos()?;
+        let pos = self.terminal.cursor_pos();
 
-        if self.row != 1 {
+        if pos.y > 0 {
+            self.terminal.move_cursor_up(offset)?;
+            self.check_cursor_pos()?;
             self.row -= 1;
+        } else {
+            if self.row != 1 {
+                self.row -= 1;
+                if let Some(document) = &self.document {
+                    let size = self.terminal.size();
+                    self.lines = document.get_lines(Range {
+                        start: self.row,
+                        end: self.row + size.height as u32,
+                    });
+                    self.check_cursor_pos()?;
+                }
+            }
         }
         Ok(())
     }
@@ -166,6 +179,7 @@ impl Editor {
                         start: self.row - size.height as u32,
                         end: self.row,
                     });
+                    self.check_cursor_pos()?;
                 }
             }
         }
@@ -219,7 +233,7 @@ impl Editor {
     fn render_status_line(&self) -> String {
         // Cursor position
         let (x, y) = cursor::position().expect("");
-        let pos = format!("({}), {}, {}", self.row, x + 1, y + 1);
+        let pos = format!("{}, {}", x + 1, self.row);
 
         let (width, _) = terminal::size().expect("");
         let space_length = width as usize - self.status.len() - pos.len();
@@ -234,11 +248,6 @@ impl Editor {
         let size = self.terminal.size();
 
         let mut buffer = String::new();
-        //if let Some(document) = &self.document {
-        /*let lines = document.get_lines(std::ops::Range {
-            start: 1,
-            end: (size.height - 1) as u32,
-        });*/
 
         for row in 0..size.height {
             if row == size.height - 1 {
@@ -258,10 +267,8 @@ impl Editor {
                     }
                 }
                 buffer += "\r\n";
-                //buffer += "\n";
             }
         }
-        //}
 
         self.terminal.render(buffer)
     }

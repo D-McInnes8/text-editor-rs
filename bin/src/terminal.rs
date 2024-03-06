@@ -55,9 +55,6 @@ impl Terminal {
     }
 
     pub fn render(&self, frame: String) -> std::io::Result<()> {
-        //trace!("Rendering");
-        info!("{}", frame);
-
         let (x, y) = crossterm::cursor::position()?;
 
         // Clear the terminal
