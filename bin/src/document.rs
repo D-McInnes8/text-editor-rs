@@ -66,6 +66,17 @@ impl Document {
 
         results
     }
+
+    pub fn insert(&mut self, line: u32, column: u32, c: char) {
+        if let Some(pos) = self.buffer.get_doc_pos(line, column) {
+            let text = c.to_string();
+            info!(
+                "Inserting text {} at position {}, line {} column {}",
+                text, pos, line, column
+            );
+            self.buffer.insert(pos as usize, text.as_str());
+        }
+    }
 }
 
 #[cfg(test)]

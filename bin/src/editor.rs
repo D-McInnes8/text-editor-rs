@@ -132,7 +132,11 @@ impl Editor {
     }
 
     fn handle_key_press(&mut self, c: char) -> std::io::Result<()> {
-        print!("{}", c);
+        //print!("{}", c);
+        if let Some(document) = self.document.as_mut() {
+            document.insert(self.row, self.column as u32, c);
+            self.should_render = true;
+        }
         Ok(())
     }
 

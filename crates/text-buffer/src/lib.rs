@@ -1,3 +1,5 @@
+use std::thread::current;
+
 use log::{debug, error, info, warn};
 
 #[derive(Debug)]
@@ -420,6 +422,24 @@ impl TextBuffer {
         count
     }
 
+    pub fn get_doc_pos(&self, line: u32, offset: u32) -> Option<u32> {
+        let mut pos = 0;
+        let mut current_line = 1;
+
+        for piece in &self.table {
+            for line_pos in &piece.lines {
+                current_line += 1;
+                if current_line == line {
+                    let final_pos = pos + line_pos + offset as usize;
+                    return Some(final_pos as u32);
+                }
+            }
+            pos += piece.len;
+        }
+
+        None
+    }
+
     fn add_to_buffer(&mut self, text: &str) -> usize {
         let pos = self.add.len();
         self.add += text;
@@ -618,6 +638,17 @@ mod tests {
         buffer.insert(11, "deletedtext");
         buffer.insert(11, " dolor");
         buffer.delete(17, 28);
+
+        let expected = "Lorem ipsum dolor sit amet";
+        let actual = buffer.text();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn insert_single_character() {
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem psum dolor sit amet")));
+        buffer.insert(6, "i");
 
         let expected = "Lorem ipsum dolor sit amet";
         let actual = buffer.text();
