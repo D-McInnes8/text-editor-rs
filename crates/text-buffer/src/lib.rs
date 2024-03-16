@@ -1,3 +1,4 @@
+use std::fmt::{Display, Write};
 use std::thread::current;
 
 use log::{debug, error, info, warn};
@@ -13,6 +14,17 @@ pub struct TextBuffer {
 pub enum BufferType {
     Original,
     Add,
+}
+
+impl Display for BufferType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = match self {
+            BufferType::Original => "Original",
+            BufferType::Add => "Append",
+        };
+
+        f.write_str(text)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -111,7 +123,7 @@ impl TextBuffer {
     ///
     /// # Arguments
     ///
-    /// * 'pos' - The position in the document where the text will be insert_end_of_line
+    /// * 'pos' - The position in the document where the text will be inserted
     /// * 'text' - The text that will be inserted at the speicified position
     pub fn insert(&mut self, pos: usize, text: &str) {
         info!("Inserting {} at position {}", text, pos);
@@ -153,6 +165,31 @@ impl TextBuffer {
         } else {
             warn!("Position {} is too large", pos);
         }
+    }
+
+    /// Inserts a single character into the given position in the document.
+    ///
+    /// # Arguments
+    ///
+    /// * 'pos' - The position in the document where the text will be inserted
+    /// * 'c' - The char that will be inserted at the specified position
+    pub fn insert_char(&mut self, pos: usize, c: char) {
+        // Check to see if the span is both at the end of the span and that the (previously)
+        // character is at the end of the append buffer. If so then simply resize the span.
+        if let Some(piece) = self.get_piece_at_position(pos) {
+            if piece.span.buffer == BufferType::Add
+                && pos == piece.doc.end
+                && piece.span.end == self.add.len()
+            {
+                self.add += c.to_string().as_str();
+                self.table[piece.index].end += 1;
+                self.table[piece.index].len += 1;
+                return;
+            }
+        }
+
+        // Otherwise insert the char as we would any other text.
+        self.insert(pos, c.to_string().as_str());
     }
 
     /// Deletes a section of text from the table. This function will perform the following
@@ -498,6 +535,35 @@ impl TextBuffer {
     }
 }
 
+impl Display for TextBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Buffer    Start   End   Text\n")?;
+
+        for span in &self.table {
+            f.write_str(pad(span.buffer.to_string().as_str(), 10, ' ').as_str())?;
+            f.write_str(pad(span.start.to_string().as_str(), 8, ' ').as_str())?;
+            f.write_str(pad(span.end.to_string().as_str(), 6, ' ').as_str())?;
+            f.write_char('"')?;
+            f.write_str(self.get_span_contents(span))?;
+            f.write_char('"')?;
+            f.write_str("\n")?;
+        }
+
+        Ok(())
+    }
+}
+
+fn pad(original: &str, width: usize, c: char) -> String {
+    if original.len() >= width {
+        return original.to_owned();
+    }
+
+    let pad_width = width - original.len();
+    let chars: String = vec![c; pad_width].into_iter().collect();
+
+    original.to_owned() + chars.as_str()
+}
+
 #[inline]
 fn is_newline_char(c: char) -> bool {
     c == 0xA as char
@@ -648,7 +714,33 @@ mod tests {
     #[test]
     fn insert_single_character() {
         let mut buffer = TextBuffer::new(Some(String::from("Lorem psum dolor sit amet")));
+        buffer.insert_char(6, 'i');
+
+        let expected = "Lorem ipsum dolor sit amet";
+        let actual = buffer.text();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn insert_single_character_as_string() {
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem psum dolor sit amet")));
         buffer.insert(6, "i");
+
+        let expected = "Lorem ipsum dolor sit amet";
+        let actual = buffer.text();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn insert_multiple_single_characters() {
+        let mut buffer = TextBuffer::new(Some(String::from("Lorem  dolor sit amet")));
+        buffer.insert_char(6, 'i');
+        buffer.insert_char(7, 'p');
+        buffer.insert_char(8, 's');
+        buffer.insert_char(9, 'u');
+        buffer.insert_char(10, 'm');
 
         let expected = "Lorem ipsum dolor sit amet";
         let actual = buffer.text();
