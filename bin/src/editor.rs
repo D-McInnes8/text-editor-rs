@@ -78,7 +78,7 @@ impl Editor {
     pub fn exit(&mut self) {
         self.exit = true;
         if let Some(document) = &self.document {
-            info!("{}", document.debug());
+            document.debug();
         }
     }
 
@@ -145,6 +145,17 @@ impl Editor {
         Ok(())
     }
 
+    fn get_document_window(&self) -> (u32, u32) {
+        let size = self.terminal.size();
+        let pos = self.terminal.cursor_pos();
+
+        let cursor_offset = (size.height - pos.y) as u32;
+        (
+            self.row - (size.height as u32 - cursor_offset),
+            self.row + cursor_offset - 1,
+        )
+    }
+
     fn move_cursor_up(&mut self, offset: u16) -> std::io::Result<()> {
         let pos = self.terminal.cursor_pos();
 
@@ -197,7 +208,7 @@ impl Editor {
 
     fn move_cursor_left(&mut self, offset: u16) -> std::io::Result<()> {
         self.terminal.move_cursor_left(offset)?;
-        self.column = self.terminal.cursor_pos().x;
+        self.column = self.terminal.cursor_pos().x + 1;
         Ok(())
     }
 
@@ -206,7 +217,7 @@ impl Editor {
 
         if (pos.x as usize) < (self.lines[pos.y as usize].len()) {
             self.terminal.move_cursor_right(offset)?;
-            self.column = self.terminal.cursor_pos().x;
+            self.column = self.terminal.cursor_pos().x + 1;
         }
         Ok(())
     }
@@ -254,29 +265,35 @@ impl Editor {
     }
 
     pub fn render(&self) -> std::io::Result<()> {
-        info!("Rendering terminal");
+        let mut buffer = String::new();
         let size = self.terminal.size();
 
-        let mut buffer = String::new();
+        if let Some(document) = &self.document {
+            let (line_start, line_end) = self.get_document_window();
+            let lines = document.get_lines(Range {
+                start: line_start,
+                end: line_end,
+            });
 
-        for row in 0..size.height {
-            if row == size.height - 1 {
-                buffer += self.render_status_line().as_str();
-            } else {
-                /*let line = lines[row as usize].as_str();
-                info!(
-                    "Unicode Width: {}, Normal Width: {}",
-                    UnicodeWidthStr::width_cjk(line),
-                    line.len()
-                );*/
-                if (row as usize) < self.lines.len() {
-                    if self.lines[row as usize].len() > size.width as usize {
-                        buffer += &self.lines[row as usize][0..size.width as usize];
-                    } else {
-                        buffer += &self.lines[row as usize];
+            for row in 0..size.height {
+                if row == size.height - 1 {
+                    buffer += self.render_status_line().as_str();
+                } else {
+                    /*let line = lines[row as usize].as_str();
+                    info!(
+                        "Unicode Width: {}, Normal Width: {}",
+                        UnicodeWidthStr::width_cjk(line),
+                        line.len()
+                    );*/
+                    if (row as usize) < lines.len() {
+                        if self.lines[row as usize].len() > size.width as usize {
+                            buffer += &lines[row as usize][0..size.width as usize];
+                        } else {
+                            buffer += &lines[row as usize];
+                        }
                     }
+                    buffer += "\r\n";
                 }
-                buffer += "\r\n";
             }
         }
 

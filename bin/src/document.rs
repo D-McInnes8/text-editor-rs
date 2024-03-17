@@ -1,7 +1,6 @@
 use std::error::Error;
-use std::ffi::{OsStr, OsString};
-use std::fs::{self, File};
-use std::io::Write;
+use std::ffi::OsString;
+use std::fs::{self};
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -91,13 +90,11 @@ impl Document {
         }
     }
 
-    pub fn debug(&self) -> String {
+    pub fn debug(&self) {
         if let Some(debug_file) = &self.debug {
             info!("Writing debug file to {:?}", debug_file);
             fs::write(debug_file, format!("{}", self.buffer));
         }
-
-        format!("{}", self.buffer)
     }
 }
 
