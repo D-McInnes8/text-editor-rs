@@ -3,6 +3,7 @@ use crossterm::cursor;
 use crossterm::event;
 use crossterm::event::Event as TerminalEvent;
 use crossterm::terminal;
+use log::info;
 use std::error::Error;
 use std::io;
 use std::ops::Range;
@@ -76,6 +77,9 @@ impl Editor {
 
     pub fn exit(&mut self) {
         self.exit = true;
+        if let Some(document) = &self.document {
+            info!("{}", document.debug());
+        }
     }
 
     pub fn load(&mut self, file: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
@@ -135,6 +139,7 @@ impl Editor {
         //print!("{}", c);
         if let Some(document) = self.document.as_mut() {
             document.insert(self.row, self.column as u32, c);
+            self.move_cursor_right(1)?;
             self.should_render = true;
         }
         Ok(())
@@ -249,6 +254,7 @@ impl Editor {
     }
 
     pub fn render(&self) -> std::io::Result<()> {
+        info!("Rendering terminal");
         let size = self.terminal.size();
 
         let mut buffer = String::new();

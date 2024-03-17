@@ -37,6 +37,13 @@ fn main() {
         .with_target_writer("*", new_writer(log_file))
         .init();
 
+    /*panic::set_hook(Box::new(|e| {
+        if Terminal::exit().is_ok() {
+            error!("{}", e);
+            eprintln!("{}", e);
+        }
+    }));*/
+
     //let mut stdout = io::stdout();
     //run(&mut stdout)
 

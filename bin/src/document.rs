@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::ffi::{OsStr, OsString};
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -10,6 +11,7 @@ use text_buffer::TextBuffer;
 pub struct Document {
     buffer: TextBuffer,
     path: Option<PathBuf>,
+    debug: Option<PathBuf>,
     name: Option<OsString>,
 }
 
@@ -18,6 +20,7 @@ impl Document {
         Document {
             buffer: TextBuffer::new(None),
             path: None,
+            debug: None,
             name: None,
         }
     }
@@ -31,10 +34,21 @@ impl Document {
         debug_assert_eq!(len, buffer.doc_len());
         debug_assert!(file_name.is_some());
 
+        let mut debug = file.to_owned();
+        if let Some(os_file_name) = file.file_name() {
+            let mut debug_file_name = os_file_name.to_os_string();
+            debug_file_name.push(".debug");
+            debug.set_file_name(debug_file_name);
+        }
+        if let Some(extension) = file.extension() {
+            debug.set_extension(extension);
+        }
+
         info!("Loaded {} characters from document {:?}", len, file);
         Ok(Document {
             buffer,
             path: Some(file),
+            debug: Some(debug),
             name: file_name,
         })
     }
@@ -69,13 +83,21 @@ impl Document {
 
     pub fn insert(&mut self, line: u32, column: u32, c: char) {
         if let Some(pos) = self.buffer.get_doc_pos(line, column) {
-            let text = c.to_string();
-            info!(
+            self.buffer.insert_char(pos as usize, c);
+            /*info!(
                 "Inserting text {} at position {}, line {} column {}",
                 text, pos, line, column
-            );
-            self.buffer.insert(pos as usize, text.as_str());
+            );*/
         }
+    }
+
+    pub fn debug(&self) -> String {
+        if let Some(debug_file) = &self.debug {
+            info!("Writing debug file to {:?}", debug_file);
+            fs::write(debug_file, format!("{}", self.buffer));
+        }
+
+        format!("{}", self.buffer)
     }
 }
 

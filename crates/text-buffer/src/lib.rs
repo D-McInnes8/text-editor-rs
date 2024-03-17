@@ -1,5 +1,4 @@
 use std::fmt::{Display, Write};
-use std::thread::current;
 
 use log::{debug, error, info, warn};
 
@@ -126,7 +125,7 @@ impl TextBuffer {
     /// * 'pos' - The position in the document where the text will be inserted
     /// * 'text' - The text that will be inserted at the speicified position
     pub fn insert(&mut self, pos: usize, text: &str) {
-        info!("Inserting {} at position {}", text, pos);
+        info!("Inserting '{}' at position {}", text, pos);
 
         // position is at the start
         if pos == 0 {
@@ -181,6 +180,9 @@ impl TextBuffer {
                 && pos == piece.doc.end
                 && piece.span.end == self.add.len()
             {
+                // TODO: Handle new line characters.
+
+                info!("Appending char '{}' to piece {:?}", c, piece.span);
                 self.add += c.to_string().as_str();
                 self.table[piece.index].end += 1;
                 self.table[piece.index].len += 1;

@@ -4,8 +4,6 @@ use std::io::Write;
 use crossterm::cursor;
 use crossterm::execute;
 use crossterm::terminal;
-use log::info;
-use log::trace;
 
 pub struct Terminal {}
 
@@ -60,7 +58,7 @@ impl Terminal {
         // Clear the terminal
         execute!(stdout(), crossterm::cursor::Hide)?;
         execute!(stdout(), crossterm::cursor::MoveTo(0, 0))?;
-        execute!(stdout(), terminal::Clear(terminal::ClearType::All)).unwrap();
+        execute!(stdout(), terminal::Clear(terminal::ClearType::All))?;
 
         print!("{}", frame);
         stdout().flush()?;
